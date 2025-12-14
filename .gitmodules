@@ -1,0 +1,6 @@
+[submodule "cpp_dll/pybind11"]
+	path = cpp_dll/pybind11
+	url = https://github.com/pybind/pybind11.git
+[submodule "cpp_dll/asio"]
+	path = cpp_dll/asio
+	url = https://github.com/chriskohlhoff/asio.git
