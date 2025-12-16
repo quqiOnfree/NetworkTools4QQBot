@@ -126,7 +126,7 @@ py::list tracert(const std::string &dest, int hops_count) {
     local_dict["ttl"] = ttl;
     asio::ip::address address;
     py::list local_list;
-    for (const auto &[ipv4_hdr, _1, length, elapsed] : future.get()) {
+    for (const auto &[ipv4_hdr, _1, length, elapsed] : composes) {
       if (address.is_unspecified() &&
           !ipv4_hdr.source_address().is_unspecified()) {
         address = ipv4_hdr.source_address();
