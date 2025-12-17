@@ -20,6 +20,3 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:network_utils_externel_cpp> ${CMAKE_CURRENT_LIST_DIR}/../src/plugins/networktools4qqbot/NetworkTools
     COMMENT "Copying the executable to the bin directory"
     )
-
-add_executable(test src/test.cpp)
-target_link_libraries(test PRIVATE asio)

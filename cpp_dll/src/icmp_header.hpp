@@ -31,6 +31,7 @@
 // |                               |                              |       v
 // +-------------------------------+------------------------------+      ---
 
+namespace net {
 class icmp_header {
 public:
   enum {
@@ -113,5 +114,6 @@ void compute_checksum(icmp_header &header, Iterator body_begin,
   sum += (sum >> 16);
   header.checksum(static_cast<unsigned short>(~sum));
 }
+} // namespace net
 
 #endif // ICMP_HEADER_HPP

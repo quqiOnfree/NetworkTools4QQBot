@@ -49,6 +49,7 @@
 // |                                                              |       v
 // +--------------------------------------------------------------+      ---
 
+namespace net {
 class ipv4_header {
 public:
   ipv4_header() noexcept { std::fill(rep_, rep_ + sizeof(rep_), 0); }
@@ -107,5 +108,6 @@ private:
 
   unsigned char rep_[60];
 };
+} // namespace net
 
 #endif // IPV4_HEADER_HPP

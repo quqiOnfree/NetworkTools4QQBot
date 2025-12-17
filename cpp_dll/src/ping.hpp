@@ -4,6 +4,7 @@
 #include <asio.hpp>
 #include <asio/experimental/awaitable_operators.hpp>
 #include <chrono>
+#include <concepts>
 #include <iostream>
 #include <istream>
 #include <ostream>
@@ -14,24 +15,50 @@
 #include "ipv4_header.hpp"
 #include "ipv6_header.hpp"
 
-template <class HeaderType>
-  requires std::is_same_v<HeaderType, ipv4_header> ||
-           std::is_same_v<HeaderType, ipv6_header>
+namespace net {
+struct use_ipv4_t {};
+struct use_ipv6_t {};
+
+inline constexpr use_ipv4_t use_ipv4;
+inline constexpr use_ipv6_t use_ipv6;
+
+template <class IPType> struct ip_token {};
+
+template <> struct ip_token<use_ipv4_t> {
+  using type = ipv4_header;
+};
+
+template <> struct ip_token<use_ipv6_t> {
+  using type = ipv6_header;
+};
+
+template <class IPType>
+using ip_token_to_header_t =
+    typename ip_token<std::remove_cvref_t<IPType>>::type;
+
+template <class IPType>
+inline constexpr bool is_ip_token_v =
+    std::is_same_v<IPType, use_ipv4_t> || std::is_same_v<IPType, use_ipv6_t>;
+
+template <class HeaderType, class OHT = std::remove_cvref_t<HeaderType>>
+  requires std::is_same_v<OHT, ipv4_header> || std::is_same_v<OHT, ipv6_header>
 struct icmp_compose {
-  HeaderType ipv4header;
+  OHT ipv4header;
   icmp_header icmpheader;
   std::size_t length;
   std::chrono::steady_clock::duration elapsed;
 };
 
-template <class HeaderType>
-  requires std::is_same_v<HeaderType, ipv4_header> ||
-           std::is_same_v<HeaderType, ipv6_header>
-inline asio::awaitable<std::vector<icmp_compose<HeaderType>>>
-async_ping(std::string_view dest, int count = 3, int ttl = 64) {
+template <class IPType, class DurationRepType,
+          class OIPT = std::remove_cvref_t<IPType>>
+  requires is_ip_token_v<OIPT>
+inline asio::awaitable<std::vector<icmp_compose<ip_token_to_header_t<OIPT>>>>
+async_ping(std::string_view dest, int count, int ttl,
+           const std::chrono::duration<DurationRepType> &timeout,
+           IPType &&type) {
   using namespace asio::experimental::awaitable_operators;
 
-  constexpr bool is_v4 = std::is_same_v<HeaderType, ipv4_header>;
+  constexpr bool is_v4 = std::is_same_v<OIPT, use_ipv4_t>;
 
   auto executor = co_await asio::this_coro::executor;
   asio::ip::icmp::resolver resolver(executor);
@@ -65,7 +92,7 @@ async_ping(std::string_view dest, int count = 3, int ttl = 64) {
 #endif
   };
 
-  std::vector<icmp_compose<HeaderType>> composes;
+  std::vector<icmp_compose<ip_token_to_header_t<OIPT>>> composes;
   for (int sequence_number = 0; sequence_number < count; ++sequence_number) {
     // Create an ICMP header for an echo request.
     icmp_header echo_request;
@@ -86,7 +113,7 @@ async_ping(std::string_view dest, int count = 3, int ttl = 64) {
 
     asio::steady_timer timer(executor);
 
-    timer.expires_after(std::chrono::seconds(5));
+    timer.expires_after(timeout);
 
     socket.async_send_to(request_buffer.data(), destination, asio::detached);
 
@@ -99,7 +126,7 @@ async_ping(std::string_view dest, int count = 3, int ttl = 64) {
     auto now = std::chrono::steady_clock::now();
     auto value_ptr = std::get_if<std::size_t>(&value);
     if (!value_ptr) {
-      composes.emplace_back(HeaderType{}, icmp_header{}, 0,
+      composes.emplace_back(ip_token_to_header_t<OIPT>{}, icmp_header{}, 0,
                             std::chrono::nanoseconds(0));
       continue;
     }
@@ -108,7 +135,7 @@ async_ping(std::string_view dest, int count = 3, int ttl = 64) {
 
     reply_buffer.commit(length);
     std::istream is(&reply_buffer);
-    HeaderType ip_hdr;
+    ip_token_to_header_t<OIPT> ip_hdr;
     icmp_header icmp_hdr;
     if constexpr (is_v4) {
       is >> ip_hdr >> icmp_hdr;
@@ -128,5 +155,6 @@ async_ping(std::string_view dest, int count = 3, int ttl = 64) {
 
   co_return composes;
 }
+} // namespace net
 
 #endif // PING_HPP

@@ -36,6 +36,7 @@
 // header fields in the base header. Extension headers follow the
 // base header if present.
 
+namespace net {
 class ipv6_header {
 public:
   ipv6_header() { std::fill(rep_, rep_ + sizeof(rep_), 0); }
@@ -88,5 +89,6 @@ public:
 private:
   unsigned char rep_[40];
 };
+} // namespace net
 
 #endif // IPV6_HEADER_HPP
