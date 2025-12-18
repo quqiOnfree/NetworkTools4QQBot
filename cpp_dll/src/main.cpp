@@ -22,11 +22,11 @@ static inline py::dict make_status_dict(std::string_view status,
 
 py::list ping(const std::string &dest, int count, int ttl, int timeout) {
   asio::io_context io_context;
-  auto future = asio::co_spawn(io_context,
-                               net::async_ping(dest, count, ttl,
-                                               std::chrono::milliseconds(timeout),
-                                               net::use_ipv4),
-                               asio::use_future);
+  auto future = asio::co_spawn(
+      io_context,
+      net::async_ping(dest, count, ttl, std::chrono::milliseconds(timeout),
+                      net::use_ipv4),
+      asio::use_future);
   io_context.run();
   py::list list;
   if (future.wait_for(std::chrono::nanoseconds(0)) ==
@@ -62,11 +62,11 @@ py::list ping(const std::string &dest, int count, int ttl, int timeout) {
 
 py::list pingv6(const std::string &dest, int count, int ttl, int timeout) {
   asio::io_context io_context;
-  auto future = asio::co_spawn(io_context,
-                               net::async_ping(dest, count, ttl,
-                                               std::chrono::milliseconds(timeout),
-                                               net::use_ipv6),
-                               asio::use_future);
+  auto future = asio::co_spawn(
+      io_context,
+      net::async_ping(dest, count, ttl, std::chrono::milliseconds(timeout),
+                      net::use_ipv6),
+      asio::use_future);
   io_context.run();
   py::list list;
   if (future.wait_for(std::chrono::nanoseconds(0)) ==
@@ -99,21 +99,22 @@ py::list pingv6(const std::string &dest, int count, int ttl, int timeout) {
   return list;
 }
 
-py::list tracert(const std::string &dest, int hops_count, int timeout) {
+py::list tracert(const std::string &dest, int timeout) {
   bool can_ping = false;
+  int hops_count = 30;
   {
     asio::io_context io_context;
-    auto future = asio::co_spawn(io_context,
-                                net::async_ping(dest, 3, 64,
-                                                std::chrono::milliseconds(1000),
-                                                net::use_ipv4),
-                                asio::use_future);
+    auto future = asio::co_spawn(
+        io_context,
+        net::async_ping(dest, 3, 64, std::chrono::milliseconds(1000),
+                        net::use_ipv4),
+        asio::use_future);
     io_context.run();
     py::list list;
     if (future.wait_for(std::chrono::nanoseconds(0)) ==
         std::future_status::deferred) {
-      list.append(make_status_dict("error",
-                                  "error occurred, the task was not processed"));
+      list.append(make_status_dict(
+          "error", "error occurred, the task was not processed"));
       return list;
     }
     std::vector<net::icmp_compose<net::ipv4_header>> composes;
@@ -126,6 +127,7 @@ py::list tracert(const std::string &dest, int hops_count, int timeout) {
     for (const auto &[ipv4_hdr, icmp_hdr, length, elapsed] : composes) {
       if (length) {
         can_ping = true;
+        hops_count = 64 - ipv4_hdr.time_to_live() - 1;
         break;
       }
     }
@@ -143,11 +145,11 @@ py::list tracert(const std::string &dest, int hops_count, int timeout) {
   std::size_t valid_idx = 0;
   for (auto ttl : std::views::iota(1) | std::views::take(hops_count)) {
     asio::io_context io_context;
-    auto future = asio::co_spawn(io_context,
-                                 net::async_ping(dest, 3, ttl,
-                                                 std::chrono::milliseconds(timeout),
-                                                 net::use_ipv4),
-                                 asio::use_future);
+    auto future = asio::co_spawn(
+        io_context,
+        net::async_ping(dest, 3, ttl, std::chrono::milliseconds(timeout),
+                        net::use_ipv4),
+        asio::use_future);
     io_context.run();
     if (future.wait_for(std::chrono::nanoseconds(0)) ==
         std::future_status::deferred) {
@@ -184,7 +186,8 @@ py::list tracert(const std::string &dest, int hops_count, int timeout) {
       local_dict["address"] = "timeout";
     }
     list.append(std::move(local_dict));
-    if (address == destination.address() || (ttl - valid_idx > 10 && !can_ping)) {
+    if (address == destination.address() ||
+        (ttl - valid_idx > 10 && !can_ping)) {
       break;
     }
   }

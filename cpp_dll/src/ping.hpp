@@ -53,9 +53,10 @@ template <class IPType, class DurationRepType, class DurationPeriodType,
           class OIPT = std::remove_cvref_t<IPType>>
   requires is_ip_token_v<OIPT>
 inline asio::awaitable<std::vector<icmp_compose<ip_token_to_header_t<OIPT>>>>
-async_ping(std::string_view dest, int count, int ttl,
-           const std::chrono::duration<DurationRepType, DurationPeriodType> &timeout,
-           IPType &&type) {
+async_ping(
+    std::string_view dest, int count, int ttl,
+    const std::chrono::duration<DurationRepType, DurationPeriodType> &timeout,
+    IPType &&type) {
   using namespace asio::experimental::awaitable_operators;
 
   constexpr bool is_v4 = std::is_same_v<OIPT, use_ipv4_t>;
