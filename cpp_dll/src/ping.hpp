@@ -22,19 +22,19 @@ struct use_ipv6_t {};
 inline constexpr use_ipv4_t use_ipv4;
 inline constexpr use_ipv6_t use_ipv6;
 
-template <class IPType> struct ip_token {};
+template <class IPType> struct ip_token_to_header {};
 
-template <> struct ip_token<use_ipv4_t> {
+template <> struct ip_token_to_header<use_ipv4_t> {
   using type = ipv4_header;
 };
 
-template <> struct ip_token<use_ipv6_t> {
+template <> struct ip_token_to_header<use_ipv6_t> {
   using type = ipv6_header;
 };
 
 template <class IPType>
 using ip_token_to_header_t =
-    typename ip_token<std::remove_cvref_t<IPType>>::type;
+    typename ip_token_to_header<std::remove_cvref_t<IPType>>::type;
 
 template <class IPType>
 inline constexpr bool is_ip_token_v =

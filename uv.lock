@@ -292,6 +292,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "nonebot-adapter-onebot" },
     { name = "nonebot2", extra = ["fastapi", "websockets"] },
+    { name = "pybind11-stubgen" },
 ]
 
 [package.optional-dependencies]
@@ -305,6 +306,7 @@ requires-dist = [
     { name = "nonebot-adapter-onebot", specifier = ">=2.4.6" },
     { name = "nonebot2", extras = ["fastapi"], specifier = ">=2.4.4" },
     { name = "nonebot2", extras = ["websockets"], specifier = ">=2.4.4" },
+    { name = "pybind11-stubgen", specifier = ">=2.5.5" },
     { name = "pyright", extras = ["nodejs"], marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
@@ -460,6 +462,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/ef/3c6ecf8b317aa982f309835e8f96987466123c6e596646d4e6a1dfcd080f/propcache-0.4.1-cp314-cp314t-win_amd64.whl", hash = "sha256:990f6b3e2a27d683cb7602ed6c86f15ee6b43b1194736f9baaeb93d0016633b1", size = 46259, upload-time = "2025-10-08T19:48:34.226Z" },
     { url = "https://files.pythonhosted.org/packages/c4/2d/346e946d4951f37eca1e4f55be0f0174c52cd70720f84029b02f296f4a38/propcache-0.4.1-cp314-cp314t-win_arm64.whl", hash = "sha256:ecef2343af4cc68e05131e45024ba34f6095821988a9d0a02aa7c73fcc448aa9", size = 40428, upload-time = "2025-10-08T19:48:35.441Z" },
     { url = "https://files.pythonhosted.org/packages/5b/5a/bc7b4a4ef808fa59a816c17b20c4bef6884daebbdf627ff2a161da67da19/propcache-0.4.1-py3-none-any.whl", hash = "sha256:af2a6052aeb6cf17d3e46ee169099044fd8224cbaf75c76a2ef596e8163e2237", size = 13305, upload-time = "2025-10-08T19:49:00.792Z" },
+]
+
+[[package]]
+name = "pybind11-stubgen"
+version = "2.5.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/81/81/81900180501a51056572dd01aa852cc2d162478d4676ecebbfaad5cc20d1/pybind11_stubgen-2.5.5.tar.gz", hash = "sha256:758d6d6bbeefc62ad7f78d5e5bbf357ccf6af83cd4504f5f549403f452942708", size = 25031, upload-time = "2025-08-09T01:22:44.403Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/e4/4f2d41881fae547f06ffa4c9748fa8ed13c4db5c830ff268b84175546b3c/pybind11_stubgen-2.5.5-py3-none-any.whl", hash = "sha256:10824cd2fc5cbbee032b8fb39e6f6c08de232deb309bc66d786a6c6e8a4601bd", size = 30210, upload-time = "2025-08-09T01:22:43.135Z" },
 ]
 
 [[package]]

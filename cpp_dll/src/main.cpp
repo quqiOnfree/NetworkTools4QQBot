@@ -9,6 +9,7 @@
 #include "icmp_header.hpp"
 #include "ipv4_header.hpp"
 #include "ping.hpp"
+#include "tcping.hpp"
 
 namespace py = pybind11;
 
@@ -194,9 +195,35 @@ py::list tracert(const std::string &dest, int timeout) {
   return list;
 }
 
+py::dict tcping(const std::string &host, std::uint16_t port) {
+  asio::io_context io_context;
+  auto future = asio::co_spawn(io_context, net::async_tcping(host, port),
+                               asio::use_future);
+  io_context.run();
+  if (future.wait_for(std::chrono::nanoseconds(0)) ==
+      std::future_status::deferred) {
+    py::dict dict =
+        make_status_dict("error", "error occurred, the task was not processed");
+    return dict;
+  }
+  try {
+    auto delay = future.get();
+    py::dict dict = make_status_dict("success", "successfully tested");
+    dict["value"] = delay.count();
+    return dict;
+  } catch (const std::exception &e) {
+    py::dict dict = make_status_dict("error", e.what());
+    return dict;
+  } catch (...) {
+    py::dict dict = make_status_dict("error", "Unknown error occurred");
+    return dict;
+  }
+}
+
 PYBIND11_MODULE(network_utils_externel_cpp, m) {
   m.doc() = "A Cpp network utils module for python";
   m.def("ping", &ping, "ping the destination");
   m.def("pingv6", &pingv6, "ping the destination in ipv6");
   m.def("tracert", &tracert, "tracert the destination");
+  m.def("tcping", &tcping, "tcping a host");
 }
