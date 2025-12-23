@@ -9,6 +9,7 @@ dependencies = [
     "nonebot2[websockets]>=2.4.4",
     "nonebot-adapter-onebot>=2.4.6",
     "pybind11-stubgen>=2.5.5",
+    "pythondns>=0.1",
 ]
 
 [project.optional-dependencies]
