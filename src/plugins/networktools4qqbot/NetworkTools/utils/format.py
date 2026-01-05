@@ -1,7 +1,6 @@
 import json
 from .resolver import resolve_domain
 
-
 def format_ping_result(result: list) -> str:
     # 汇总结果
     # 总传输包
