@@ -6,14 +6,16 @@ from nonebot.params import CommandArg
 from nonebot.exception import FinishedException
 
 from . import network_utils_externel_cpp
-from .utils.format import format_ping_result
+from .utils.format import format_ping_result, format_whois_result
 from .utils.resolver import resolve_domain
+from .utils.whois import whois_query
 
 __plugin_name__ = "NetworkTools"
 __plugin_usage__ = """
 NetworkTools 插件提供了一些网络相关的工具命令，例如 ping、traceroute 等。
 """
 ping = on_command("ping", priority=5, block=True)
+whois = on_command("whois", priority=5, block=True)
 
 @ping.handle()
 async def handle_ping(args: Message = CommandArg()):
@@ -126,3 +128,36 @@ async def handle_ping(args: Message = CommandArg()):
 
     else:
         await ping.finish(f"用法: ping <host> [-4|-6] [-i ttl] [-w timeout] [count]\n示例: ping example.com -4 -i 64 -w 1000 4")
+
+@whois.handle()
+async def handle_whois(args: Message = CommandArg()):
+    if args:
+        arg_list = args.extract_plain_text().split()
+        if len(arg_list) >= 1:
+            domain = arg_list[0]
+            raw = False
+            # 遍历参数
+            i = 1
+            while i < len(arg_list):
+                if arg_list[i] == "--raw":
+                    raw = True
+                    await whois.send("注意：启用 --raw 选项后，返回的结果可能非常冗长，可能会导致消息发送失败。")
+                i += 1
+            try:
+                await whois.send(f"正在查询域名 {domain} 的 WHOIS 信息，请稍候...")
+                result = await whois_query(domain, raw)
+                formatted_result = await format_whois_result(result)
+                if raw:
+                    await whois.send(f"Whois 查询结果（原始数据）:\n{result.get('data', {}).get('raw', '无原始数据')}")
+                if result.get("status") == 1:
+                    if result.get("data", {}).get("is_available") == 1:
+                        await whois.finish(f"域名 {domain} 可能未被注册。")
+                    else:
+                        await whois.finish(f"Whois 查询结果:\n{formatted_result}")
+
+            except FinishedException:
+                raise
+            except Exception as e:
+                await whois.finish(f"执行 whois 命令时出错: {e}, 这可能是由于查询失败导致的。")
+    else:
+        await whois.finish(f"用法: whois <domain>\n示例: whois example.com")

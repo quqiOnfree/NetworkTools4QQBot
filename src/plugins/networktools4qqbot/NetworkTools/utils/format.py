@@ -1,7 +1,6 @@
 import json
 from .resolver import resolve_domain
 
-
 def format_ping_result(result: list) -> str:
     # 汇总结果
     # 总传输包
@@ -52,3 +51,18 @@ def format_ping_result(result: list) -> str:
 
 
     return "\n".join(output_lines)
+
+async def format_whois_result(result: dict) -> str:
+    data = result.get("data", {})
+    info = data.get("info", {})
+    lines = []
+    lines.append(f"域名: {data.get('domain')}")
+    lines.append(f"注册商: {info.get('registrar_name')}")
+    lines.append(f"注册人: {info.get('registrant_name') if info.get('registrant_name') else '无数据，可能是启用了隐私防护'}")
+    lines.append(f"注册人邮箱: {info.get('registrant_email') if info.get('registrant_email') else '无数据，可能是启用了隐私防护'}")
+    lines.append(f"创建时间: {info.get('creation_time')}")
+    lines.append(f"到期时间: {info.get('expiration_time')}")
+    lines.append(f"状态: {', '.join(info.get('domain_status', [])) if info.get('domain_status') else 'N/A'}")
+    lines.append(f"名称服务器: {', '.join(info.get('name_server', [])) if info.get('name_server') else 'N/A'}")
+    lines.append(f"Whois 服务器: {info.get('whois_server')}")
+    return "\n".join(lines)
