@@ -21,8 +21,9 @@ static inline py::dict make_status_dict(std::string_view status,
   return dict;
 }
 
-template <class IPType, class OriginalIPType = std::remove_cvref_t<IPType>>
+template <class IPType>
 py::list ping(const std::string &dest, int count, int ttl, int timeout) {
+  using OriginalIPType = std::remove_cvref_t<IPType>;
   asio::io_context io_context;
   auto future = asio::co_spawn(
       io_context,
@@ -63,8 +64,9 @@ py::list ping(const std::string &dest, int count, int ttl, int timeout) {
   return list;
 }
 
-template <class IPType, class OriginalIPType = std::remove_cvref_t<IPType>>
+template <class IPType>
 py::list tracert(const std::string &dest, int hops_count, int timeout) {
+  using OriginalIPType = std::remove_cvref_t<IPType>;
   bool can_ping = false;
   {
     asio::io_context io_context;
