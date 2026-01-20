@@ -17,7 +17,10 @@ netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow proto
 ## 插件用法
 | 功能 | 命令格式 | 命令示例 | PS |
 | --- | --- | --- | --- |
-| Ping | `/ping` `<host>` `<times>` | `/ping github.com 3 5000` | |
+| Ping | `ping <host> [-4\|-6] [-i ttl] [-w timeout] [count]` | `/ping github.com -4 -i 64 -w 5000 3` |  |
+| Whois | `whois <domain>` | `whois example.com` |  |
+| Tracert |  |  | cpp api已实现，python调用接口还未完成 |
+| Nslookup |  |  | 未实现 |
 
 ## Documentation
 
