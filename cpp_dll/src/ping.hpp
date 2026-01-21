@@ -5,12 +5,11 @@
 #include <asio/experimental/awaitable_operators.hpp>
 #include <chrono>
 #include <concepts>
-#include <iostream>
 #include <istream>
 #include <ostream>
-#include <print>
 #include <string>
 #include <string_view>
+#include <variant>
 
 #include "icmp_header.hpp"
 #include "ipv4_header.hpp"
@@ -34,69 +33,87 @@ template <> struct ip_token_to_header<use_ipv6_t> {
 };
 
 template <class IPType>
-using ip_token_to_header_t =
-    typename ip_token_to_header<std::remove_cvref_t<IPType>>::type;
+using ip_token_to_header_t = typename ip_token_to_header<IPType>::type;
 
 template <class IPType>
 inline constexpr bool is_ip_token_v =
     std::is_same_v<IPType, use_ipv4_t> || std::is_same_v<IPType, use_ipv6_t>;
 
-template <class HeaderType, class OHT = std::remove_cvref_t<HeaderType>>
-  requires std::is_same_v<OHT, ipv4_header> || std::is_same_v<OHT, ipv6_header>
+template <class HeaderType>
+  requires std::is_same_v<HeaderType, ipv4_header> ||
+           std::is_same_v<HeaderType, ipv6_header>
 struct icmp_compose {
-  OHT ipv4header{};
-  icmp_header icmpheader{};
-  std::size_t length = 0;
+  HeaderType ip_hd{};
+  icmp_header icmp_hd{};
+  std::size_t length{0};
   std::chrono::steady_clock::duration elapsed{};
 };
 
-template <class IPType, class DurationRepType, class DurationPeriodType,
-          class OIPT = std::remove_cvref_t<IPType>>
-  requires is_ip_token_v<OIPT>
-inline asio::awaitable<std::vector<icmp_compose<ip_token_to_header_t<OIPT>>>>
-async_ping(
-    std::string_view dest, int count, int ttl,
-    const std::chrono::duration<DurationRepType, DurationPeriodType> &timeout,
-    IPType &&type) {
-  using namespace asio::experimental::awaitable_operators;
+inline std::uint16_t get_identifier() noexcept {
+#if defined(ASIO_WINDOWS)
+  return static_cast<unsigned short>(::GetCurrentProcessId());
+#else
+  return static_cast<unsigned short>(::getpid());
+#endif
+}
 
-  constexpr bool is_v4 = std::is_same_v<OIPT, use_ipv4_t>;
+template <class IPType>
+  requires is_ip_token_v<IPType>
+class pinger {
+public:
+  using ip_type = IPType;
+  using ip_header_type = ip_token_to_header_t<ip_type>;
+  using icmp_compose_type = icmp_compose<ip_header_type>;
 
-  auto executor = co_await asio::this_coro::executor;
-  asio::ip::icmp::resolver resolver(executor);
+  pinger(asio::any_io_executor &exec) : executor(exec) {}
+  pinger(const pinger &) = delete;
+  pinger(pinger &&) = default;
+  ~pinger() = default;
 
-  constexpr auto get_icmp = [] -> asio::ip::icmp {
+  pinger &operator=(const pinger &) = delete;
+  pinger &operator=(pinger &&) = default;
+
+  static asio::ip::icmp get_icmp_protocol() noexcept {
     if constexpr (is_v4) {
       return asio::ip::icmp::v4();
     } else {
       return asio::ip::icmp::v6();
     }
-  };
-
-  asio::ip::icmp::endpoint destination =
-      *resolver.resolve(get_icmp(), dest, "").begin();
-  asio::ip::icmp::socket socket(executor, get_icmp());
-  std::string body("\"Hello!\" from Asio ping.");
-  asio::streambuf reply_buffer;
-
-  if constexpr (is_v4) {
-    if (ttl != 64) {
-      asio::ip::unicast::hops hops(ttl);
-      socket.set_option(hops);
-    }
   }
 
-  auto get_identifier = [] -> unsigned short {
-#if defined(ASIO_WINDOWS)
-    return static_cast<unsigned short>(::GetCurrentProcessId());
-#else
-    return static_cast<unsigned short>(::getpid());
-#endif
-  };
+  template <class DurationRepType, class DurationPeriodType>
+  asio::awaitable<std::vector<icmp_compose_type>>
+  async_ping(std::string_view dest, int count, int ttl,
+             const std::chrono::duration<DurationRepType, DurationPeriodType>
+                 &timeout) {
+    if (count <= 0 || ttl <= 0) {
+      co_return std::vector<icmp_compose_type>{};
+    }
 
-  std::vector<icmp_compose<ip_token_to_header_t<OIPT>>> composes;
-  for (int sequence_number = 0; sequence_number < count; ++sequence_number) {
-    // Create an ICMP header for an echo request.
+    asio::ip::icmp::endpoint destination{
+        *resolver.resolve(get_icmp_protocol(), dest, "").begin()};
+    asio::ip::unicast::hops hops(ttl);
+
+    socket.set_option(hops);
+
+    std::vector<icmp_compose_type> composes;
+    for (int sequence_number = 0; sequence_number < count; ++sequence_number) {
+      co_await ping_send_pack(destination, sequence_number);
+
+      auto res = co_await ping_receive_pack(sequence_number, timeout);
+      if (std::holds_alternative<icmp_compose_type>(res)) {
+        composes.emplace_back(*std::get_if<icmp_compose_type>(&res));
+      } else {
+        composes.push_back({});
+      }
+    }
+    co_return composes;
+  }
+
+protected:
+  asio::awaitable<void>
+  ping_send_pack(const asio::ip::icmp::endpoint &destination,
+                 int sequence_number) {
     icmp_header echo_request;
     if constexpr (is_v4) {
       echo_request.type(std::to_underlying(icmp_header::ipv4::echo_request));
@@ -113,34 +130,46 @@ async_ping(
     std::ostream os(&request_buffer);
     os << echo_request << body;
 
+    co_await socket.async_send_to(request_buffer.data(), destination,
+                                  asio::use_awaitable);
+    co_return;
+  }
+
+  template <class DurationRepType, class DurationPeriodType,
+            std::size_t RecursionLimit = 256>
+  asio::awaitable<std::variant<std::monostate, icmp_compose_type>>
+  ping_receive_pack(
+      int sequence_number,
+      const std::chrono::duration<DurationRepType, DurationPeriodType> &timeout,
+      std::size_t recursion_time = 0) {
+    using namespace asio::experimental::awaitable_operators;
+
+    asio::streambuf reply_buffer;
     asio::steady_timer timer(executor);
+    asio::ip::icmp::endpoint sender;
 
     timer.expires_after(timeout);
-
-    socket.async_send_to(request_buffer.data(), destination, asio::detached);
-
-    reply_buffer.consume(reply_buffer.size());
     auto time_sent = std::chrono::steady_clock::now();
-    asio::ip::icmp::endpoint sender;
     auto value =
         co_await (socket.async_receive_from(reply_buffer.prepare(65536), sender,
                                             asio::use_awaitable) ||
                   timer.async_wait(asio::use_awaitable));
-
     auto now = std::chrono::steady_clock::now();
     auto value_ptr = std::get_if<std::size_t>(&value);
     if (!value_ptr) {
-      composes.emplace_back(ip_token_to_header_t<OIPT>{}, icmp_header{}, 0,
-                            std::chrono::nanoseconds(0));
-      continue;
+      co_return std::monostate{};
     }
 
     std::size_t length = *value_ptr;
 
     reply_buffer.commit(length);
     std::istream is(&reply_buffer);
-    ip_token_to_header_t<OIPT> ip_hdr;
+    ip_header_type ip_hdr;
     icmp_header icmp_hdr;
+
+    if (!is) {
+      co_return std::monostate{};
+    }
     if constexpr (is_v4) {
       is >> ip_hdr >> icmp_hdr;
     } else {
@@ -149,24 +178,59 @@ async_ping(
       ip_hdr.set_source_address(sender.address().to_v6());
     }
 
-    if (is &&
-        (icmp_hdr.type() ==
-             (is_v4 ? std::to_underlying(icmp_header::ipv4::time_exceeded)
-                    : std::to_underlying(icmp_header::ipv6::time_exceeded)) ||
-         icmp_hdr.type() ==
-                 (is_v4 ? std::to_underlying(icmp_header::ipv4::echo_reply)
-                        : std::to_underlying(icmp_header::ipv6::echo_reply)) &&
-             icmp_hdr.identifier() == get_identifier() &&
-             icmp_hdr.sequence_number() == sequence_number)) {
+    if (icmp_hdr.type() ==
+        (is_v4 ? std::to_underlying(icmp_header::ipv4::time_exceeded)
+               : std::to_underlying(icmp_header::ipv6::time_exceeded))) {
       auto elapsed = now - time_sent;
-      composes.emplace_back(std::move(ip_hdr), std::move(icmp_hdr), length,
-                            std::move(elapsed));
+      co_return icmp_compose_type{std::move(ip_hdr), std::move(icmp_hdr),
+                                  length, std::move(elapsed)};
+    } else if (icmp_hdr.type() ==
+               (is_v4 ? std::to_underlying(icmp_header::ipv4::echo_reply)
+                      : std::to_underlying(icmp_header::ipv6::echo_reply))) {
+      if (icmp_hdr.identifier() != get_identifier()) {
+        if (recursion_time < RecursionLimit) {
+          co_return co_await ping_receive_pack(sequence_number, timeout,
+                                               recursion_time + 1);
+        } else {
+          co_return std::monostate{};
+        }
+      }
+      if (icmp_hdr.sequence_number() == sequence_number) {
+        auto elapsed = now - time_sent;
+        co_return icmp_compose_type{std::move(ip_hdr), std::move(icmp_hdr),
+                                    length, std::move(elapsed)};
+      } else if (recursion_time < RecursionLimit) {
+        co_return co_await ping_receive_pack(sequence_number, timeout,
+                                             recursion_time + 1);
+      } else {
+        co_return std::monostate{};
+      }
     } else {
-      composes.push_back({});
+      co_return std::monostate{};
     }
   }
 
-  co_return composes;
+private:
+  inline static const std::string body{"\"Hello!\" from Asio ping."};
+  inline static constexpr bool is_v4 = std::is_same_v<ip_type, use_ipv4_t>;
+
+  asio::any_io_executor &executor;
+  asio::ip::icmp::resolver resolver{executor};
+
+  asio::ip::icmp::socket socket{executor, get_icmp_protocol()};
+};
+
+template <class IPType, class DurationRepType, class DurationPeriodType>
+  requires is_ip_token_v<std::remove_cvref_t<IPType>>
+inline asio::awaitable<std::vector<
+    icmp_compose<ip_token_to_header_t<std::remove_cvref_t<IPType>>>>>
+async_ping(
+    std::string_view dest, int count, int ttl,
+    const std::chrono::duration<DurationRepType, DurationPeriodType> &timeout,
+    IPType &&type) {
+  auto executor = co_await asio::this_coro::executor;
+  pinger<std::remove_cvref_t<IPType>> local_pinger{executor};
+  co_return co_await local_pinger.async_ping(dest, count, ttl, timeout);
 }
 } // namespace net
 

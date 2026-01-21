@@ -12,6 +12,7 @@
 #define ICMP_HEADER_HPP
 
 #include <algorithm>
+#include <concepts>
 #include <istream>
 #include <ostream>
 #include <type_traits>
@@ -114,13 +115,12 @@ private:
   unsigned char rep_[8];
 };
 
-template <typename Iterator>
-void compute_checksum(icmp_header &header, Iterator body_begin,
-                      std::type_identity_t<Iterator> body_end) {
+template <std::input_iterator It, std::sentinel_for<It> St>
+void compute_checksum(icmp_header &header, It body_begin, St body_end) {
   unsigned int sum = (header.type() << 8) + header.code() +
                      header.identifier() + header.sequence_number();
 
-  Iterator body_iter = body_begin;
+  It body_iter = body_begin;
   while (body_iter != body_end) {
     sum += (static_cast<unsigned char>(*body_iter++) << 8);
     if (body_iter != body_end)
